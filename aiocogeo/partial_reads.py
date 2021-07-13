@@ -80,14 +80,7 @@ class PartialReadBase(abc.ABC):
         bounds: Tuple[float, float, float, float],
         shape: Tuple[int, int],
         resample_method: int,
-    ) -> Union[np.ndarray, np.ma.masked_array]:if self._add_mask:
-
-            mask = Image.fromarray(clipped.mask[0, ...])
-            resized_mask = np.array(
-                mask.resize((out_shape[0], out_shape[1]), resample=Image.BILINEAR)
-            )
-            resized_mask = np.stack([resized_mask for _ in range(img_tiles.bands)])
-            resized = np.ma.masked_array(resized, resized_mask)
+    ) -> Union[np.ndarray, np.ma.masked_array]:
         """Do a partial read"""
         ...
 
@@ -105,14 +98,7 @@ class PartialReadBase(abc.ABC):
         read_bounds: Tuple[float, float, float, float],
         cog_bounds: Tuple[float, float, float, float],
     ) -> bool:
-        """if self._add_mask:
-
-            mask = Image.fromarray(clipped.mask[0, ...])
-            resized_mask = np.array(
-                mask.resize((out_shape[0], out_shape[1]), resample=Image.BILINEAR)
-            )
-            resized_mask = np.stack([resized_mask for _ in range(img_tiles.bands)])
-            resized = np.ma.masked_array(resized, resized_mask)
+        """
         Determine if a bounding box intersects another bounding box
 
         https://github.com/cogeotiff/rio-tiler/blob/2.0a11/rio_tiler/utils.py#L254-L283
@@ -237,14 +223,7 @@ class PartialReadBase(abc.ABC):
     def _stitch_image_tile(
         arr: NpArrayType,
         fused_arr: NpArrayType,
-        idx: int,if self._add_mask:
-
-            mask = Image.fromarray(clipped.mask[0, ...])
-            resized_mask = np.array(
-                mask.resize((out_shape[0], out_shape[1]), resample=Image.BILINEAR)
-            )
-            resized_mask = np.stack([resized_mask for _ in range(img_tiles.bands)])
-            resized = np.ma.masked_array(resized, resized_mask)
+        idx: int,
         idy: int,
         tile_width: int,
         tile_height: int,
@@ -317,14 +296,13 @@ class PartialReadBase(abc.ABC):
         ).astype(img_tiles.dtype)
         if clipped.shape[0] != 1:
             resized = np.rollaxis(resized, 2, 0)
-        # a bug is present here for Sentinel data
-#         if self._add_mask:
-#             mask = Image.fromarray(clipped.mask[0, ...])
-#             resized_mask = np.array(
-#                 mask.resize((out_shape[0], out_shape[1]), resample=Image.BILINEAR)
-#             )
-#             resized_mask = np.stack([resized_mask for _ in range(img_tiles.bands)])
-#             resized = np.ma.masked_array(resized, resized_mask)
+        if self._add_mask:
+            mask = Image.fromarray(clipped.mask[0, ...])
+            resized_mask = np.array(
+                mask.resize((out_shape[0], out_shape[1]), resample=Image.BILINEAR)
+            )
+            resized_mask = np.stack([resized_mask for _ in range(img_tiles.bands)])
+            resized = np.ma.masked_array(resized, resized_mask)
         return resized
 
     def _postprocess(
