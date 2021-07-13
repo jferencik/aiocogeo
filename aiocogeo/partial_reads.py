@@ -303,7 +303,7 @@ class PartialReadBase(abc.ABC):
         #     )
         #     resized_mask = np.stack([resized_mask for _ in range(img_tiles.bands)])
         #     resized = np.ma.masked_array(resized, resized_mask)
-        # return resized
+        return resized
 
     def _postprocess(
         self,
