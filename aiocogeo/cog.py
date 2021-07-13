@@ -18,7 +18,7 @@ from .errors import InvalidTiffError, TileNotFoundError
 from .filesystems import Filesystem
 from .ifd import IFD, ImageIFD, MaskIFD
 from .partial_reads import PartialReadInterface
-
+import math
 logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
 
@@ -282,6 +282,7 @@ class COGReader(ReaderMixin, PartialReadInterface):
         """GDAL_METADATA contents"""
         return self.ifds[0].gdal_metadata
 
+
     async def _read_header(self) -> None:
         """Internal method to read image header and parse into IFDs and Tags"""
         next_ifd_offset = 1
@@ -367,6 +368,65 @@ class COGReader(ReaderMixin, PartialReadInterface):
         if ifd.nodata is not None:
             return np.ma.masked_where(tile[0] == ifd.nodata, tile[0])
         return tile[0]
+
+    async def read_tiles(self,
+                         bounds: Tuple[float, float, float, float],
+                         clip: bool
+                        ) ->  Tuple[np.ndarray, List]:
+        """
+        Perform a partial read on
+        :param bounds:
+        :return:
+        """
+        # Determine which tiles intersect the request bounds
+
+
+        ovr_level = 0
+        ifd = self.ifds[ovr_level]
+        img_tiles = self._calculate_image_tiles(
+            bounds,
+            tile_width=ifd.TileWidth.value,
+            tile_height=ifd.TileHeight.value,
+            band_count=ifd.bands,
+            ovr_level=ovr_level,
+            dtype=ifd.dtype,
+        )
+        if not self._intersect_bounds(bounds, self.native_bounds):
+            raise TileNotFoundError("Partial read is outside bounds of the image")
+
+        # Request those tiles
+        if config.HTTP_MERGE_CONSECUTIVE_RANGES:
+            img_arr = await self._request_merged_tiles(img_tiles)
+        else:
+            img_arr = await self._request_tiles(img_tiles)
+
+        gt = self.geotransform()
+        xmin, ymin, xmax, ymax = bounds
+
+        tile_tlx = gt.c + img_tiles.xmin * img_tiles.tile_width * gt.a
+        tile_tly = gt.f + img_tiles.ymin * img_tiles.tile_height * gt.e
+
+        if not clip:
+            gdal_gt = (tile_tlx, gt.a, 0, tile_tly, 0, gt.e)
+
+            return img_arr, gdal_gt
+
+        xoffset = int(math.floor((xmin - tile_tlx) / gt.a))
+        yoffset = int(math.floor((ymax - tile_tly) / gt.e))
+
+        width = int(math.floor(xmax-xmin)/gt.a)
+        height = abs(int(math.floor(ymax-ymin)/gt.e))
+
+        clip_tlx = gt.c + (img_tiles.xmin * img_tiles.tile_width + xoffset) * gt.a
+        clip_tly = gt.f + (img_tiles.ymin * img_tiles.tile_height + yoffset) * gt.e
+        gdal_gt = (clip_tlx, gt.a, 0, clip_tly, 0, gt.e)
+        clipped = img_arr[:,yoffset:yoffset+height+1,xoffset:xoffset+width+1]
+
+
+        return clipped, gdal_gt
+
+
+
 
     async def read(
         self,
